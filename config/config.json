@@ -1,0 +1,18 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "last-commenter-field-customizer": {
+      "components": [
+        {
+          "entrypoint": "./lib/extensions/lastCommenter/LastCommenterFieldCustomizer.js",
+          "manifest": "./src/extensions/lastCommenter/LastCommenterFieldCustomizer.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {
+    "LastCommenterFieldCustomizerStrings": "lib/extensions/lastCommenter/loc/{locale}.js"
+  }
+}

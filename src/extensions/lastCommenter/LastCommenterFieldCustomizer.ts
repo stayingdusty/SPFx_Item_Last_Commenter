@@ -5,8 +5,6 @@ import {
   IFieldCustomizerCellEventParameters
 } from '@microsoft/sp-listview-extensibility';
 import { SPHttpClient } from '@microsoft/sp-http';
-import * as React from 'react';
-import * as ReactDOM from 'react-dom';
 
 export interface ILastCommenterFieldCustomizerProperties {
   // No custom properties needed for basic implementation
@@ -27,112 +25,124 @@ export default class LastCommenterFieldCustomizer
 
   @override
   public onRenderCell(event: IFieldCustomizerCellEventParameters): void {
-    const itemId = event.listItem.getValueByName('ID');
-    
-    // Check cache first
-    if (this._commentCache.has(itemId)) {
-      const cachedEmail = this._commentCache.get(itemId);
-      this.renderEmail(event.domElement, cachedEmail || 'N/A');
-    } else {
-      // Show loading state
-      this.renderEmail(event.domElement, 'Loading...');
-      
-      // Fetch last commenter
-      this.getLastCommenterEmail(itemId)
-        .then(email => {
-          this._commentCache.set(itemId, email);
-          this.renderEmail(event.domElement, email);
-        })
-        .catch(error => {
-          console.error(`Error fetching comments for item ${itemId}:`, error);
-          this.renderEmail(event.domElement, 'N/A');
-        });
-    }
-  }
+    try {
+      // Get the item ID - field customizers have limited access to list item properties
+      // The most reliable way is to use the field value if it's the ID field, or get it from the context
+      let itemId: number | undefined;
 
-  private renderEmail(element: HTMLElement, email: string): void {
-    const emailElement = React.createElement(
-      'div',
-      { 
-        style: { 
-          padding: '4px',
-          fontSize: '12px',
-          color: email === 'Loading...' ? '#666' : '#0078d4'
-        } 
-      },
-      email
-    );
-    
-    ReactDOM.render(emailElement, element);
+      // If this customizer is associated with the ID field, use the field value
+      if (event.fieldValue && typeof event.fieldValue === 'number') {
+        itemId = event.fieldValue;
+      } else if (event.fieldValue && typeof event.fieldValue === 'string') {
+        itemId = parseInt(event.fieldValue);
+      }
+
+      // If that doesn't work, try to get it from listItem (may not be available)
+      if (!itemId && event.listItem) {
+        try {
+          itemId = event.listItem.getValueByName('ID') || event.listItem.getValueByName('id');
+        } catch (e) {
+          // listItem access might fail in some contexts
+        }
+      }
+
+      // If still no ID, try to extract from URL or other context
+      if (!itemId) {
+        // Try to get from page context or URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const itemIdParam = urlParams.get('ID');
+        if (itemIdParam) {
+          itemId = parseInt(itemIdParam);
+        }
+      }
+
+      if (!itemId || isNaN(itemId)) {
+        event.domElement.innerHTML = '<div style="padding: 4px; font-size: 11px; color: #ff0000;">No ID</div>';
+        return;
+      }
+
+      // Check cache first
+      if (this._commentCache.has(itemId)) {
+        const cachedEmail = this._commentCache.get(itemId);
+        if (cachedEmail) {
+          event.domElement.innerHTML = `<div style="padding: 4px; font-size: 11px; color: #000000; line-height: 1.3;">${cachedEmail}</div>`;
+        } else {
+          event.domElement.innerHTML = ''; // No comments - show nothing
+        }
+      } else {
+        // Show loading state
+        event.domElement.innerHTML = '<div style="padding: 4px; font-size: 11px; color: #666;">Loading...</div>';
+
+        // Fetch last commenter
+        this.getLastCommenterEmail(itemId)
+          .then(email => {
+            this._commentCache.set(itemId, email);
+            if (email) {
+              event.domElement.innerHTML = `<div style="padding: 4px; font-size: 11px; color: #000000; line-height: 1.3;">${email}</div>`;
+            } else {
+              event.domElement.innerHTML = ''; // No comments - show nothing
+            }
+          })
+          .catch(error => {
+            console.error(`Error fetching comments for item ${itemId}:`, error);
+            event.domElement.innerHTML = ''; // Error - show nothing
+          });
+      }
+    } catch (error) {
+      console.error('Error in onRenderCell:', error);
+      event.domElement.innerHTML = '<div style="padding: 4px; font-size: 11px; color: #ff0000;">Error</div>';
+    }
   }
 
   private async getLastCommenterEmail(itemId: number): Promise<string> {
     try {
       const listId = this.context.pageContext.list?.id?.toString();
       if (!listId) {
-        return 'No list';
+        return '';
       }
 
-      // First try to get comments from list items (modern SharePoint comments)
+      // Only show information if there are comments
       try {
         const commentsApiUrl = `${this.context.pageContext.web.absoluteUrl}/_api/web/lists(guid'${listId}')/items(${itemId})/Comments?$expand=author&$orderby=createdDate desc&$top=1`;
-
-        console.log('Trying comments API:', commentsApiUrl);
 
         const commentsResponse = await this.context.spHttpClient.get(
           commentsApiUrl,
           SPHttpClient.configurations.v1
         );
 
-        console.log('Comments API response status:', commentsResponse.status);
-
         if (commentsResponse.ok) {
           const commentsData = await commentsResponse.json();
-          console.log('Comments data:', commentsData);
 
           if (commentsData.value && commentsData.value.length > 0) {
             const lastComment = commentsData.value[0];
-            const email = lastComment.author?.email || lastComment.author?.title || 'No email';
-            console.log('Found comment author:', email);
-            return email;
-          } else {
-            console.log('No comments found for item', itemId);
+            
+            // Format the comment information
+            const createdDate = new Date(lastComment.createdDate);
+            const localDateTime = createdDate.toLocaleString([], {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+            
+            const firstName = lastComment.author?.firstName || '';
+            const lastName = lastComment.author?.lastName || '';
+            const fullName = `${firstName} ${lastName}`.trim();
+            const email = lastComment.author?.email || '';
+            
+            return `at: ${localDateTime}<br>by: ${fullName} ${email}`;
           }
-        } else {
-          console.log('Comments API failed with status:', commentsResponse.status);
-          const errorText = await commentsResponse.text();
-          console.log('Comments API error:', errorText);
         }
       } catch (commentsError) {
-        console.log('Comments API exception:', commentsError);
+        // Comments API not available
       }
 
-      // Fallback: show the last modified user
-      console.log('Falling back to last modified user for item', itemId);
-      const itemApiUrl = `${this.context.pageContext.web.absoluteUrl}/_api/web/lists(guid'${listId}')/items(${itemId})?$select=Editor/EMail,Editor/Title&$expand=Editor`;
-
-      const response = await this.context.spHttpClient.get(
-        itemApiUrl,
-        SPHttpClient.configurations.v1
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const email = data.Editor?.EMail || data.Editor?.Title || 'No editor';
-      console.log('Last modified user:', email);
-      return email;
+      // No comments found - return empty string to show nothing
+      return '';
     } catch (error) {
       console.error('Error in getLastCommenterEmail:', error);
-      return 'Error';
+      return '';
     }
-  }
-
-  @override
-  public onDisposeCell(event: IFieldCustomizerCellEventParameters): void {
-    ReactDOM.unmountComponentAtNode(event.domElement);
-    super.onDisposeCell(event);
   }
 }

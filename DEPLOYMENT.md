@@ -49,9 +49,25 @@ fetch(`${siteUrl}/_api/web/lists/getbytitle('YourList')/fields/getbyinternalname
 ```
 
 ## What It Does
-- **For Document Libraries**: Shows the email address of the person who last commented on each document (if comments are enabled)
-- **For Regular Lists**: Shows the email address of the person who last modified each item
+- **For Lists with Comments**: Shows the email address of the person who last commented on each item
+- **For Lists without Comments**: Shows the email address of the person who last modified each item
 - Caches results for better performance
 - Displays "Loading..." while fetching data
 - Shows "N/A" if no data exists or errors occur
-- Gracefully falls back from comments to last modified user if comments aren't available
+- Gracefully handles API failures and permission issues
+
+## Troubleshooting
+
+### "Extension failed to load" Error
+If you see this error in the browser console:
+1. Make sure the `.sppkg` file is properly uploaded to the App Catalog
+2. Verify the field customizer is associated with the correct field
+3. Check that the field customizer has the right permissions
+
+### Field Shows Blank
+The field customizer tries multiple methods to get the item ID:
+1. Uses the field value if it's associated with an ID field
+2. Falls back to list item properties
+3. Extracts from URL parameters as last resort
+
+If still blank, check browser console for JavaScript errors.

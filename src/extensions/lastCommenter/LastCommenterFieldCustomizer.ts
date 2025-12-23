@@ -16,6 +16,7 @@ export default class LastCommenterFieldCustomizer
   extends BaseFieldCustomizer<ILastCommenterFieldCustomizerProperties> {
 
   private _commentCache: Map<number, string> = new Map();
+  private _itemDataCache: Map<number, { admin1: string; admin2: string }> = new Map();
 
   @override
   public onInit(): Promise<void> {
@@ -74,7 +75,7 @@ export default class LastCommenterFieldCustomizer
         event.domElement.innerHTML = '<div style="padding: 4px; font-size: 11px; color: #666;">Loading...</div>';
 
         // Fetch last commenter
-        this.getLastCommenterEmail(itemId)
+        this.getLastCommenterEmail(itemId, event.listItem)
           .then(email => {
             this._commentCache.set(itemId, email);
             if (email) {
@@ -94,11 +95,39 @@ export default class LastCommenterFieldCustomizer
     }
   }
 
-  private async getLastCommenterEmail(itemId: number): Promise<string> {
+  private async getLastCommenterEmail(itemId: number, listItem?: any): Promise<string> {
     try {
       const listId = this.context.pageContext.list?.id?.toString();
       if (!listId) {
         return '';
+      }
+
+      // Fetch admin_1 and admin_2 values from the list item
+      let admin1Email = '';
+      let admin2Email = '';
+
+      try {
+        // Fetch from API with proper expansion for people picker fields
+        const itemUrl = `${this.context.pageContext.web.absoluteUrl}/_api/web/lists(guid'${listId}')/items(${itemId})?$select=admin_1/EMail,admin_2/EMail&$expand=admin_1,admin_2`;
+        const itemResponse = await this.context.spHttpClient.get(
+          itemUrl,
+          SPHttpClient.configurations.v1
+        );
+
+        if (itemResponse.ok) {
+          const itemData = await itemResponse.json();
+          
+          // People picker fields return objects with EMail property
+          admin1Email = itemData.admin_1?.EMail || '';
+          admin2Email = itemData.admin_2?.EMail || '';
+          
+          console.log(`Admin fields for item ${itemId}: admin_1=${admin1Email}, admin_2=${admin2Email}`);
+        }
+
+        // Cache the admin values
+        this._itemDataCache.set(itemId, { admin1: admin1Email, admin2: admin2Email });
+      } catch (itemError) {
+        console.warn(`Could not fetch admin fields for item ${itemId}:`, itemError);
       }
 
       // Only show information if there are comments
@@ -131,7 +160,15 @@ export default class LastCommenterFieldCustomizer
             const fullName = `${firstName} ${lastName}`.trim();
             const email = lastComment.author?.email || '';
             
-            return `at: ${localDateTime}<br>by: ${fullName} ${email}`;
+            // Check if the last commenter is an admin
+            const isAdmin = (email && (email === admin1Email || email === admin2Email));
+            const adminStatus = isAdmin ? 'admin: yes' : 'admin: no';
+            
+            console.log(`Comparing commenter email "${email}" with admin_1 "${admin1Email}" and admin_2 "${admin2Email}". Match: ${isAdmin}`);
+            
+            // Apply background color styling for non-admin commenters
+            const bgColor = isAdmin ? 'transparent' : '#D4E7F6';
+            return `<div style="padding: 4px; background-color: ${bgColor}; border-radius: 3px;">at: ${localDateTime}<br>by: ${fullName} ${email}<br>${adminStatus}</div>`;
           }
         }
       } catch (commentsError) {

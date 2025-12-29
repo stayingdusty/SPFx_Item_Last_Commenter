@@ -62,13 +62,39 @@ Other build commands can be listed using `heft --help`.
 
 ## Features
 
-Description of the extension that expands upon high-level summary above.
+### Last Commenter Display
+The field customizer displays the most recent comment information for items in your list or library. The display includes:
 
-This extension illustrates the following concepts:
+- **Timestamp**: Date and time of the last comment (formatted as MM/DD/YYYY HH:MM)
+- **Commenter**: Full name and email address of the person who made the last comment
+- **Admin Status**: Indicates whether the commenter is an administrator
 
-- topic 1
-- topic 2
-- topic 3
+### Admin Fields (admin_1 and admin_2)
+The customizer supports two optional people picker fields named `admin_1` and `admin_2` that define who is considered an administrator:
+
+- **Field Type**: People Picker columns
+- **Field Names**: Must be named exactly `admin_1` and `admin_2` (case-sensitive)
+- **Purpose**: These fields identify authorized administrators for your list items
+- **Impact**: The admin status in the display shows "admin: yes" if the last commenter matches either admin field, or "admin: no" otherwise
+
+### Display Formatting
+- **For Non-Admins**: The comment information is displayed with a light blue background (#D4E7F6) with rounded corners and 4px padding
+- **For Admins**: The comment information is displayed with a transparent background
+- **Format**: 
+  ```
+  at: [Date and Time]
+  by: [Full Name] [Email]
+  admin: [yes/no]
+  ```
+
+### Caching and Performance
+- Comment data is cached in memory to reduce API calls and improve performance
+- Admin field values are also cached per list item
+
+### Error Handling
+- Gracefully handles missing comments (returns empty display)
+- Handles cases where admin fields don't exist on the list
+- Provides console logging for debugging purposes
 
 > Notice that better pictures and documentation will increase the sample usage and the value you are providing for others. Thanks for your submissions advance.
 

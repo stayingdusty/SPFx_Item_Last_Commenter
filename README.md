@@ -62,6 +62,107 @@ Other build commands can be listed using `heft --help`.
 
 ## Features
 
+### Attach via Browser Console (Per List/Field)
+Field customizer binding is stored on a specific field in a specific list.
+That means you must attach it once per list/field pair.
+
+- If you use `getbytitle('...')`, you must provide the correct list title each time.
+- If you run the script from inside a list view, you can avoid hardcoding the list title by using the current list ID from page context.
+
+Use this script when you want to bind by list title:
+
+```javascript
+(async () => {
+  const listTitle = "test_list"; // change per list
+  const fieldInternalName = "ID"; // change per target field
+  const componentId = "680d1d6e-610a-4a21-8d98-e5edccd066d7";
+
+  const webRel = (_spPageContextInfo.webServerRelativeUrl || "").replace(/\/$/, "");
+  const apiBase = webRel + "/_api";
+
+  const digestRes = await fetch(apiBase + "/contextinfo", {
+    method: "POST",
+    headers: { Accept: "application/json;odata=nometadata" }
+  });
+  const digest = (await digestRes.json()).FormDigestValue;
+
+  const fieldUrl =
+    apiBase +
+    "/web/lists/getbytitle('" +
+    encodeURIComponent(listTitle) +
+    "')/fields/getbyinternalnameortitle('" +
+    fieldInternalName +
+    "')";
+
+  const res = await fetch(fieldUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/json;odata=nometadata",
+      "Content-Type": "application/json;odata=nometadata",
+      "X-RequestDigest": digest,
+      "IF-MATCH": "*",
+      "X-HTTP-Method": "MERGE"
+    },
+    body: JSON.stringify({
+      ClientSideComponentId: componentId,
+      ClientSideComponentProperties: JSON.stringify({})
+    })
+  });
+
+  console.log(res.ok ? "Attached" : `Failed ${res.status}: ${await res.text()}`);
+})();
+```
+
+Use this script when you run it from the target list page and want to avoid list titles:
+
+```javascript
+(async () => {
+  const listId = _spPageContextInfo.pageListId; // current list
+  const fieldInternalName = "ID"; // change per target field
+  const componentId = "680d1d6e-610a-4a21-8d98-e5edccd066d7";
+
+  if (!listId) {
+    throw new Error("No list context found. Open a list view page and try again.");
+  }
+
+  const webRel = (_spPageContextInfo.webServerRelativeUrl || "").replace(/\/$/, "");
+  const apiBase = webRel + "/_api";
+
+  const digestRes = await fetch(apiBase + "/contextinfo", {
+    method: "POST",
+    headers: { Accept: "application/json;odata=nometadata" }
+  });
+  const digest = (await digestRes.json()).FormDigestValue;
+
+  const fieldUrl =
+    apiBase +
+    "/web/lists(guid'" +
+    listId +
+    "')/fields/getbyinternalnameortitle('" +
+    fieldInternalName +
+    "')";
+
+  const res = await fetch(fieldUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/json;odata=nometadata",
+      "Content-Type": "application/json;odata=nometadata",
+      "X-RequestDigest": digest,
+      "IF-MATCH": "*",
+      "X-HTTP-Method": "MERGE"
+    },
+    body: JSON.stringify({
+      ClientSideComponentId: componentId,
+      ClientSideComponentProperties: JSON.stringify({})
+    })
+  });
+
+  console.log(res.ok ? "Attached" : `Failed ${res.status}: ${await res.text()}`);
+})();
+```
+
+Tip for many lists: keep one script and only change `fieldInternalName`, then run it from each list where you want the customizer.
+
 ### Last Commenter Display
 The field customizer displays the most recent comment information for items in your list or library. The display includes:
 
